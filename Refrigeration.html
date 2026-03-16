@@ -1,0 +1,1758 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เกมระบบทำความเย็น (Refrigeration Master)</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- Confetti Library -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style type="text/tailwindcss">
+        body { font-family: 'Kanit', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Mobile Container */
+        .app-container { max-width: 480px; margin: 0 auto; min-height: 100vh; position: relative; background-color: #1e293b; box-shadow: 0 0 20px rgba(0,0,0,0.5); overflow-x: hidden; }
+        
+        .btn-primary { @apply bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow transition transform active:scale-95; }
+        .btn-secondary { @apply bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded shadow transition transform active:scale-95; }
+        .btn-danger { @apply bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded shadow transition transform active:scale-95; }
+        .btn-success { @apply bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow transition transform active:scale-95; }
+        .btn-warning { @apply bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded shadow transition transform active:scale-95; }
+        
+        .input-field { @apply w-full bg-slate-800 text-white border border-slate-600 rounded p-3 mb-3 focus:outline-none focus:border-blue-500; }
+        
+        /* Stats Card */
+        .stat-card { @apply bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col items-center justify-center; }
+        
+        /* Popup Animation */
+        @keyframes popIn { 0% { transform: scale(0); opacity: 0; } 70% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); } }
+        .pop-in { animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+        /* Gold, Silver, Bronze text colors */
+        .rank-1 { color: #fbbf24; text-shadow: 0 0 10px rgba(251, 191, 36, 0.5); }
+        .rank-2 { color: #94a3b8; text-shadow: 0 0 10px rgba(148, 163, 184, 0.5); }
+        .rank-3 { color: #b45309; text-shadow: 0 0 10px rgba(180, 83, 9, 0.5); }
+    </style>
+</head>
+<body>
+
+<div id="app" class="app-container relative">
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 hidden">
+        <div class="bg-slate-800 border-l-4 border-blue-500 text-white px-6 py-3 rounded shadow-lg flex items-center">
+            <span id="toast-icon" class="mr-2"><i class="fas fa-info-circle"></i></span>
+            <span id="toast-message">แจ้งเตือน</span>
+        </div>
+    </div>
+
+    <!-- Error Screen (Config Missing) -->
+    <div id="screen-error" class="hidden flex flex-col items-center justify-center h-screen bg-red-900 p-6 text-center">
+        <i class="fas fa-exclamation-triangle text-6xl text-red-300 mb-4"></i>
+        <h1 class="text-2xl font-bold text-white mb-2">Configuration Error</h1>
+        <p class="text-red-200">ไม่พบการตั้งค่า Firebase หรือ Config ไม่ถูกต้อง</p>
+        <div class="mt-4 bg-red-950 p-4 rounded text-left text-sm font-mono text-red-200 w-full break-all">
+            ตรวจสอบตัวแปร firebaseConfig ในโค้ด
+        </div>
+    </div>
+
+    <!-- Loading Screen -->
+    <div id="screen-loading" class="flex flex-col items-center justify-center h-screen bg-slate-900 z-40 absolute top-0 w-full">
+        <div class="loader mb-4"></div>
+        <p class="text-slate-400">กำลังเชื่อมต่อฐานข้อมูล...</p>
+    </div>
+
+    <!-- Auth Screen -->
+    <div id="screen-auth" class="hidden min-h-screen flex flex-col justify-center p-6 fade-in">
+        <div class="text-center mb-8">
+            <i class="fas fa-snowflake text-6xl text-blue-400 mb-2"></i>
+            <h1 class="text-3xl font-bold text-white">Refrigeration Master</h1>
+            <p class="text-slate-400">เรียนรู้ระบบทำความเย็นแบบมืออาชีพ</p>
+        </div>
+
+        <div class="bg-slate-800 p-6 rounded-xl shadow-lg">
+            <div class="flex mb-6 border-b border-slate-700">
+                <button onclick="ui.showAuthTab('login')" id="tab-login" class="flex-1 pb-2 text-blue-400 border-b-2 border-blue-400 font-bold">เข้าสู่ระบบ</button>
+                <button onclick="ui.showAuthTab('register')" id="tab-register" class="flex-1 pb-2 text-slate-400 hover:text-white">ลงทะเบียน</button>
+            </div>
+
+            <!-- Login Form -->
+            <div id="form-login">
+                <label class="block text-sm text-slate-400 mb-1">เบอร์โทรศัพท์</label>
+                <input type="tel" id="login-phone" class="input-field" placeholder="08xxxxxxxx">
+                <button onclick="auth.login()" class="btn-primary w-full mt-2">เข้าสู่ระบบ <i class="fas fa-sign-in-alt ml-2"></i></button>
+                <div class="mt-4 text-center">
+                    <button onclick="ui.showScreen('screen-admin-auth')" class="text-xs text-slate-500 hover:text-slate-300">ผู้ดูแลระบบ</button>
+                </div>
+            </div>
+
+            <!-- Register Form -->
+            <div id="form-register" class="hidden">
+                <label class="block text-sm text-slate-400 mb-1">ชื่อ - นามสกุล</label>
+                <input type="text" id="reg-name" class="input-field" placeholder="นายช่าง แอร์เย็น">
+                
+                <label class="block text-sm text-slate-400 mb-1">เบอร์โทรศัพท์ (ใช้เป็น ID)</label>
+                <input type="tel" id="reg-phone" class="input-field" placeholder="08xxxxxxxx">
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-1">ห้อง/แผนก</label>
+                        <input type="text" id="reg-room" class="input-field" placeholder="1/1">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-400 mb-1">ปีการศึกษา</label>
+                        <input type="text" id="reg-year" class="input-field" placeholder="2567">
+                    </div>
+                </div>
+
+                <button onclick="auth.register()" class="btn-success w-full mt-2">ลงทะเบียน <i class="fas fa-user-plus ml-2"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Screen -->
+    <div id="screen-dashboard" class="hidden min-h-screen p-6 fade-in flex flex-col justify-center relative">
+        <!-- Leaderboard Button (Top Right) -->
+        <div class="absolute top-4 right-4">
+            <button onclick="ui.loadLeaderboard()" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-lg shadow flex items-center space-x-2 text-sm">
+                <i class="fas fa-trophy"></i>
+                <span>อันดับ</span>
+            </button>
+        </div>
+
+        <div class="text-center mb-8 mt-4">
+            <h2 class="text-3xl font-bold text-white mb-1">ยินดีต้อนรับ</h2>
+            <p class="text-xl text-blue-400" id="dash-user-name">User Name</p>
+            <p class="text-sm text-slate-500" id="dash-user-phone">08x-xxx-xxxx</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mb-8">
+            <div class="stat-card">
+                <i class="fas fa-star text-yellow-400 text-2xl mb-2"></i>
+                <p class="text-3xl font-bold text-white" id="dash-total-score">0</p>
+                <p class="text-xs text-slate-400">คะแนนรวม</p>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-flag-checkered text-green-400 text-2xl mb-2"></i>
+                <p class="text-3xl font-bold text-white" id="dash-levels-cleared">0</p>
+                <p class="text-xs text-slate-400">ด่านที่ผ่าน</p>
+            </div>
+        </div>
+
+        <div class="space-y-3">
+            <button onclick="loadLevelList()" class="w-full btn-success py-4 text-lg shadow-lg relative overflow-hidden group">
+                <span class="relative z-10"><i class="fas fa-play mr-2"></i> เล่นเกมต่อ</span>
+                <div class="absolute inset-0 bg-white/10 transform -translate-x-full group-hover:translate-x-0 transition-transform duration-300"></div>
+            </button>
+            
+            <button onclick="ui.confirmNewGame()" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-4 rounded shadow">
+                <i class="fas fa-redo mr-2"></i> เริ่มเกมใหม่ (ลบข้อมูล)
+            </button>
+            
+            <button onclick="auth.logout()" class="w-full text-slate-500 py-2 text-sm hover:text-red-400 mt-4">
+                ออกจากระบบ
+            </button>
+        </div>
+    </div>
+
+    <!-- Leaderboard Screen -->
+    <div id="screen-leaderboard" class="hidden min-h-screen p-4 bg-slate-900 fade-in flex flex-col">
+        <header class="flex justify-between items-center mb-6 pt-2 border-b border-slate-700 pb-4">
+            <button onclick="loadDashboard()" class="text-slate-400 hover:text-white flex items-center">
+                <i class="fas fa-arrow-left mr-2"></i> กลับ
+            </button>
+            <h2 class="text-xl font-bold text-white"><i class="fas fa-trophy text-yellow-500 mr-2"></i>50 อันดับสูงสุด</h2>
+            <div class="w-10"></div> <!-- Spacer for centering -->
+        </header>
+
+        <div class="flex-1 overflow-y-auto">
+            <table class="w-full text-sm text-left text-slate-400">
+                <thead class="text-xs text-slate-200 uppercase bg-slate-800 sticky top-0">
+                    <tr>
+                        <th class="px-3 py-3 w-12 text-center">#</th>
+                        <th class="px-3 py-3">ชื่อ</th>
+                        <th class="px-3 py-3 text-right">คะแนน</th>
+                    </tr>
+                </thead>
+                <tbody id="leaderboard-list">
+                    <!-- Rows injected here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Level List Screen -->
+    <div id="screen-level-list" class="hidden min-h-screen p-4 pb-20 fade-in relative">
+        <header class="flex justify-between items-center mb-6 pt-2">
+            <button onclick="loadDashboard()" class="text-slate-400 hover:text-white flex items-center">
+                <i class="fas fa-arrow-left mr-2"></i> หน้าแรก
+            </button>
+            <div class="text-right">
+                <h2 class="text-sm font-bold text-white" id="user-display-name">สวัสดี</h2>
+                <p class="text-xs text-slate-400" id="user-display-phone">08x-xxx-xxxx</p>
+            </div>
+        </header>
+
+        <!-- Overall Progress -->
+        <div class="bg-gradient-to-r from-blue-900 to-slate-800 p-4 rounded-xl shadow-lg mb-6 border border-blue-800">
+            <div class="flex justify-between items-end mb-2">
+                <span class="text-blue-200 font-bold">ความคืบหน้าทั้งหมด</span>
+                <div class="text-right">
+                    <span class="text-2xl font-bold text-white block leading-none" id="total-progress">0%</span>
+                    <span class="text-xs text-yellow-400 font-bold" id="grand-total-score">คะแนนรวม: 0</span>
+                </div>
+            </div>
+            <div class="w-full bg-slate-900 rounded-full h-2.5">
+                <div class="bg-blue-500 h-2.5 rounded-full transition-all duration-1000" id="total-progress-bar" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <h3 class="text-lg font-bold text-white mb-4 border-l-4 border-green-500 pl-3">ภารกิจด่านต่างๆ</h3>
+        
+        <div id="level-list" class="space-y-4">
+            <!-- Dynamic Levels will be injected here -->
+        </div>
+
+        <div class="mt-8 text-center text-xs text-slate-600">
+            <p>1. เข้าใจหลักการ | 2. ทักษะปฏิบัติ | 3. คุณธรรมจริยธรรม</p>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="screen-game" class="hidden min-h-screen flex flex-col p-4 bg-slate-900 fade-in relative overflow-hidden">
+        <!-- Feedback Overlay -->
+        <div id="feedback-overlay" class="hidden absolute inset-0 z-50 flex flex-col items-center justify-center pointer-events-none bg-black/40 backdrop-blur-sm transition-opacity duration-300">
+            <i id="feedback-icon" class="text-8xl mb-4 drop-shadow-2xl"></i>
+            <h1 id="feedback-text" class="text-5xl font-bold text-white drop-shadow-lg tracking-wider"></h1>
+            <p id="feedback-score" class="text-xl text-yellow-300 mt-2 font-bold"></p>
+        </div>
+
+        <div class="flex justify-between items-center mb-2">
+            <button onclick="game.quit()" class="text-slate-400 hover:text-white">
+                <i class="fas fa-chevron-left mr-1"></i> ย้อนกลับ
+            </button>
+            <div class="flex items-center space-x-4">
+                <div class="bg-slate-800 px-3 py-1 rounded-full border border-slate-700 flex items-center">
+                    <i class="fas fa-star text-yellow-400 mr-2"></i>
+                    <span id="ingame-score" class="font-bold text-white">0</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <i class="fas fa-clock text-yellow-500"></i>
+                    <span id="game-timer" class="font-mono text-xl text-yellow-400">00:00</span>
+                </div>
+            </div>
+            <!-- NEW: Combo Display -->
+            <div id="combo-display" class="hidden flex items-center bg-gradient-to-r from-orange-500 to-red-600 px-3 py-1 rounded-full shadow-lg transform scale-90 origin-right transition-all">
+                <span class="text-white font-bold text-xs mr-1 italic">STREAK</span>
+                <span id="combo-count" class="text-white font-black text-lg">2</span>
+            </div>
+        </div>
+
+        <!-- Time Line (เส้นหมดเวลา) -->
+        <div class="w-full bg-slate-800 h-2 mb-6 rounded-full overflow-hidden relative">
+             <div id="timer-bar" class="bg-blue-500 h-full transition-all duration-1000 ease-linear shadow-[0_0_10px_rgba(59,130,246,0.5)]" style="width: 100%"></div>
+        </div>
+
+        <div class="flex-1 flex flex-col justify-center">
+            <!-- Question Progress (X/Y) -->
+            <div class="flex justify-between items-end mb-2 px-1">
+                <span id="q-counter" class="text-xs font-bold text-blue-400 uppercase tracking-wide">คำถามที่ 1/10</span>
+                <span class="text-xs text-slate-500">ความคืบหน้า</span>
+            </div>
+            <div class="w-full bg-slate-800 h-1.5 mb-6 rounded-full overflow-hidden">
+                <div id="game-progress" class="bg-green-500 h-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+
+            <!-- Question Card -->
+            <div class="bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700 mb-6 relative overflow-hidden">
+                <!-- Decorative Circle -->
+                <div class="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl"></div>
+                
+                <h2 id="q-text" class="text-xl font-bold text-white mt-2 leading-relaxed relative z-10">
+                    คำถามกำลังโหลด...
+                </h2>
+            </div>
+
+            <!-- Choices -->
+            <div id="choices-container" class="space-y-3">
+                <!-- Buttons will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Result Screen -->
+    <div id="screen-result" class="hidden min-h-screen flex flex-col items-center justify-center p-6 text-center fade-in bg-slate-900">
+        <div class="mb-6 relative">
+            <i class="fas fa-trophy text-6xl text-yellow-400 animate-bounce"></i>
+            <div class="absolute -top-2 -right-2 text-yellow-200 animate-ping"><i class="fas fa-star"></i></div>
+        </div>
+        <h2 class="text-3xl font-bold text-white mb-2">จบด่าน!</h2>
+        <p class="text-slate-400 mb-6" id="result-title">ด่านที่ 1</p>
+
+        <div class="grid grid-cols-2 gap-4 w-full max-w-xs mb-8">
+            <div class="bg-slate-800 p-4 rounded-lg">
+                <p class="text-xs text-slate-400">คะแนน</p>
+                <p class="text-2xl font-bold text-green-400" id="result-score">0</p>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-lg">
+                <p class="text-xs text-slate-400">เวลา (วินาที)</p>
+                <p class="text-2xl font-bold text-blue-400" id="result-time">0</p>
+            </div>
+        </div>
+        
+        <div class="flex space-x-3 w-full max-w-xs">
+            <button onclick="loadLevelList()" class="btn-secondary flex-1">หน้ารายการด่าน</button>
+            <button onclick="game.retry()" class="btn-primary flex-1">เล่นอีกครั้ง</button>
+        </div>
+    </div>
+
+    <!-- Admin Auth -->
+    <div id="screen-admin-auth" class="hidden min-h-screen flex flex-col justify-center p-6 fade-in bg-slate-900">
+        <h2 class="text-2xl font-bold text-white mb-4 text-center"><i class="fas fa-user-shield"></i> ผู้ดูแลระบบ</h2>
+        <div class="bg-slate-800 p-6 rounded-xl shadow-lg">
+            <label class="block text-sm text-slate-400 mb-1">รหัสผ่าน (Passcode)</label>
+            <input type="password" id="admin-passcode" class="input-field" placeholder="รหัสเข้าใช้งาน">
+            <div class="flex space-x-2 mt-2">
+                <button onclick="ui.showScreen('screen-auth')" class="btn-secondary flex-1">กลับ</button>
+                <button onclick="admin.login()" class="btn-primary flex-1">เข้าสู่ระบบ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="screen-admin-dash" class="hidden min-h-screen p-4 bg-slate-900 fade-in">
+        <header class="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
+            <h2 class="text-xl font-bold text-white">Admin Panel</h2>
+            <button onclick="ui.showScreen('screen-auth')" class="text-red-400 text-sm">ออกจากระบบ</button>
+        </header>
+
+        <!-- Tabs -->
+        <div class="flex space-x-2 mb-4 overflow-x-auto pb-2">
+            <button onclick="admin.showTab('manage-cats')" class="bg-blue-600 text-white px-3 py-1 rounded text-sm whitespace-nowrap">จัดการด่าน</button>
+            <button onclick="admin.showTab('manage-users')" class="bg-slate-700 text-white px-3 py-1 rounded text-sm whitespace-nowrap">ดูคะแนนผู้เล่น</button>
+        </div>
+
+        <!-- Tab Content: Manage Categories -->
+        <div id="admin-tab-cats" class="fade-in">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-lg text-white">รายการด่าน</h3>
+                <div class="flex gap-2">
+                     <button onclick="admin.seedData()" class="btn-warning text-xs"><i class="fas fa-cloud-upload-alt"></i> ติดตั้งข้อมูลเริ่มต้น</button>
+                     <button onclick="admin.openAddCatModal()" class="btn-success text-xs"><i class="fas fa-plus"></i> เพิ่มด่าน</button>
+                </div>
+            </div>
+            <div id="admin-cat-list" class="space-y-3 mb-8">
+                <!-- Cats list -->
+            </div>
+            
+            <div id="admin-question-section" class="hidden mt-8 pt-8 border-t border-slate-700">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg text-white">คำถามในหมวด: <span id="admin-current-cat-name" class="text-blue-400"></span></h3>
+                    <button onclick="admin.closeQuestionSection()" class="text-slate-400 text-sm">ปิด</button>
+                </div>
+                
+                <!-- NEW: Buttons Row -->
+                <div class="flex space-x-2 mb-4">
+                    <button onclick="admin.openAddQuestionModal()" class="flex-1 btn-primary"><i class="fas fa-plus-circle"></i> เพิ่มข้อเดียว</button>
+                    <button onclick="admin.openImportModal()" class="flex-1 btn-warning"><i class="fas fa-file-csv"></i> นำเข้า (CSV)</button>
+                </div>
+
+                <div id="admin-question-list" class="space-y-3">
+                    <!-- Questions list -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Content: Users -->
+        <div id="admin-tab-users" class="hidden fade-in">
+            <h3 class="text-lg text-white mb-2">คะแนนผู้เล่น</h3>
+            <div class="mb-4 flex gap-2">
+                 <button onclick="admin.resetLeaderboard()" class="btn-danger text-xs">Reset All Scores</button>
+                 <button onclick="admin.loadUsers()" class="btn-secondary text-xs"><i class="fas fa-sync"></i> Refresh</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left text-slate-400">
+                    <thead class="text-xs text-slate-200 uppercase bg-slate-700">
+                        <tr>
+                            <th class="px-3 py-2">ชื่อ</th>
+                            <th class="px-3 py-2">ห้อง/ปี</th>
+                            <th class="px-3 py-2">ด่าน 1</th>
+                            <th class="px-3 py-2">ด่าน 2</th>
+                            <th class="px-3 py-2">ด่าน 3</th>
+                        </tr>
+                    </thead>
+                    <tbody id="admin-user-table">
+                        <!-- User rows -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- NEW: Game Start Options Modal -->
+    <div id="modal-game-options" class="hidden fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-800 p-6 rounded-lg w-full max-w-sm text-center">
+            <h3 class="text-2xl font-bold text-white mb-2">เริ่มเกม</h3>
+            <p class="text-slate-400 mb-6" id="modal-game-title">เลือกรูปแบบการเล่น</p>
+            
+            <div class="space-y-3">
+                <button id="btn-start-new" class="w-full btn-primary py-3 text-lg shadow-lg">
+                    <i class="fas fa-play-circle mr-2"></i> เริ่มเล่นใหม่ทั้งหมด
+                </button>
+                
+                <button id="btn-retry-wrong" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-4 rounded shadow transition disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fas fa-history mr-2"></i> เล่นซ้ำข้อที่ผิด
+                    <span id="wrong-count-badge" class="ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full hidden">0</span>
+                </button>
+            </div>
+            
+            <button onclick="ui.closeModal('modal-game-options')" class="mt-6 text-slate-500 text-sm hover:text-white">ยกเลิก</button>
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div id="modal-confirm" class="hidden fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-800 p-6 rounded-lg w-full max-w-sm text-center">
+            <i class="fas fa-exclamation-triangle text-yellow-500 text-4xl mb-4"></i>
+            <h3 class="text-xl font-bold text-white mb-2">ยืนยันการเริ่มใหม่?</h3>
+            <p class="text-slate-400 mb-6">ข้อมูลคะแนนและความคืบหน้าทั้งหมดจะถูกลบถาวร</p>
+            <div class="flex space-x-3">
+                <button onclick="ui.closeModal('modal-confirm')" class="btn-secondary flex-1">ยกเลิก</button>
+                <button onclick="ui.resetMyProgress()" class="btn-danger flex-1">ยืนยันลบ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Category Modal -->
+    <div id="modal-cat" class="hidden fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-800 p-6 rounded-lg w-full max-w-sm">
+            <h3 class="text-white font-bold mb-4">จัดการหมวดหมู่</h3>
+            <input type="hidden" id="cat-id">
+            <label class="text-xs text-slate-400">ชื่อด่าน</label>
+            <input type="text" id="cat-title" class="input-field">
+            <label class="text-xs text-slate-400">เวลาต่อข้อ (วินาที)</label>
+            <input type="number" id="cat-time" class="input-field" value="30">
+            <div class="flex justify-end space-x-2">
+                <button onclick="ui.closeModal('modal-cat')" class="btn-secondary">ยกเลิก</button>
+                <button onclick="admin.saveCategory()" class="btn-primary">บันทึก</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Question Modal -->
+    <div id="modal-q" class="hidden fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-800 p-6 rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h3 class="text-white font-bold mb-4">จัดการคำถาม</h3>
+            <input type="hidden" id="q-id">
+            
+            <label class="text-xs text-slate-400">คำถาม</label>
+            <textarea id="q-text-input" class="input-field h-24"></textarea>
+            
+            <label class="text-xs text-slate-400">คำตอบที่ถูก</label>
+            <input type="text" id="q-right" class="input-field border-green-600">
+            
+            <div id="wrong-answers-container">
+                <label class="text-xs text-slate-400">ตัวลวง 1</label>
+                <input type="text" class="input-field border-red-900 wrong-ans-input">
+            </div>
+            
+            <button onclick="admin.addWrongChoiceField()" class="text-xs text-blue-400 mb-4">+ เพิ่มตัวเลือกหลอก</button>
+
+            <div class="flex justify-end space-x-2">
+                <button onclick="ui.closeModal('modal-q')" class="btn-secondary">ยกเลิก</button>
+                <button onclick="admin.saveQuestion()" class="btn-primary">บันทึก</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW: Import Modal -->
+    <div id="modal-import" class="hidden fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-800 p-6 rounded-lg w-full max-w-md">
+            <h3 class="text-white font-bold mb-2">นำเข้าคำถาม (CSV)</h3>
+            <p class="text-xs text-slate-400 mb-2">รูปแบบ: คำถาม, คำตอบถูก, ตัวหลอก1, ตัวหลอก2, ... (บรรทัดละ 1 ข้อ)</p>
+            <textarea id="import-text" class="input-field h-48 text-sm font-mono" placeholder="1+1 เท่ากับ?, 2, 1, 3, 4&#10;สีแดงผสมเหลืองได้?, ส้ม, เขียว, ม่วง"></textarea>
+            <div class="flex justify-end space-x-2">
+                <button onclick="ui.closeModal('modal-import')" class="btn-secondary">ยกเลิก</button>
+                <button onclick="admin.importQuestions()" class="btn-success">นำเข้าข้อมูล</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio Elements -->
+    <audio id="bg-music" loop>
+        <source src="https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="sfx-correct">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-correct-answer-tone-2870.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="sfx-wrong">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-wrong-answer-fail-notification-946.mp3" type="audio/mpeg">
+    </audio>
+
+</div>
+
+<!-- Firebase SDK -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+    import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, query, where, deleteDoc, addDoc, orderBy } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+    // --- Config & Init ---
+    let firebaseConfig;
+    if (typeof __firebase_config !== 'undefined') {
+        // Use environment config for Canvas Preview
+        firebaseConfig = JSON.parse(__firebase_config);
+    } else {
+        // Fallback or Production Config
+        firebaseConfig = {
+          apiKey: "AIzaSyD3kDvWDlfUeR7IjzKGs35r6Mya7FoZ78g",
+          authDomain: "refrigeration-bfdfa.firebaseapp.com",
+          projectId: "refrigeration-bfdfa",
+          storageBucket: "refrigeration-bfdfa.firebasestorage.app",
+          messagingSenderId: "298038733466",
+          appId: "1:298038733466:web:b8f5574632b97c8d144d23"
+        };
+    }
+
+    // App ID for Firestore paths (Canvas Requirement)
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'refrigeration-game';
+
+    let app, auth, db;
+    let currentUserData = null; // Store user profile from Firestore
+
+    // --- State Management ---
+    const state = {
+        user: null, // Firebase Auth User
+        currentScreen: 'screen-loading',
+        activeCategory: null,
+        questions: [],
+        currentQuestionIndex: 0,
+        score: 0,
+        correctCount: 0, // เพิ่มตัวแปรนับจำนวนข้อที่ถูก
+        wrongQuestionIds: [], // Track wrong IDs during current session
+        gameMode: 'new', // 'new' or 'retry'
+        totalQuestionsInCategory: 0, // Store total questions for accurate % calculation in retry mode
+        timer: null,
+        timeLeft: 0,
+        combo: 0,
+        maxCombo: 0,
+        isAdmin: false
+    };
+
+    // --- Firestore Path Helpers (Canvas Strict Mode) ---
+    const getCollRef = (colName) => {
+        // Use public data collection so admins and users can read/write shared data (like leaderboards)
+        return collection(db, 'artifacts', appId, 'public', 'data', colName);
+    }
+    const getDocRef = (colName, docId) => {
+        return doc(db, 'artifacts', appId, 'public', 'data', colName, docId);
+    }
+
+    // --- UI Helper Class ---
+    window.ui = {
+        showScreen: (screenId) => {
+            document.querySelectorAll('[id^="screen-"]').forEach(el => el.classList.add('hidden'));
+            document.getElementById(screenId).classList.remove('hidden');
+            state.currentScreen = screenId;
+        },
+        showAuthTab: (tab) => {
+            if(tab === 'login') {
+                document.getElementById('form-login').classList.remove('hidden');
+                document.getElementById('form-register').classList.add('hidden');
+                document.getElementById('tab-login').classList.add('text-blue-400', 'border-b-2', 'border-blue-400');
+                document.getElementById('tab-login').classList.remove('text-slate-400');
+                document.getElementById('tab-register').classList.remove('text-blue-400', 'border-b-2', 'border-blue-400');
+                document.getElementById('tab-register').classList.add('text-slate-400');
+            } else {
+                document.getElementById('form-login').classList.add('hidden');
+                document.getElementById('form-register').classList.remove('hidden');
+                document.getElementById('tab-register').classList.add('text-blue-400', 'border-b-2', 'border-blue-400');
+                document.getElementById('tab-register').classList.remove('text-slate-400');
+                document.getElementById('tab-login').classList.remove('text-blue-400', 'border-b-2', 'border-blue-400');
+                document.getElementById('tab-login').classList.add('text-slate-400');
+            }
+        },
+        showGameOptions: (catId, catData, userProg) => {
+            document.getElementById('modal-game-title').textContent = catData.title;
+            const modal = document.getElementById('modal-game-options');
+            modal.classList.remove('hidden');
+            
+            // Start New Config
+            const btnNew = document.getElementById('btn-start-new');
+            btnNew.onclick = () => {
+                ui.closeModal('modal-game-options');
+                startGame(catId, catData, 'new');
+            };
+
+            // Retry Wrong Config
+            const btnRetry = document.getElementById('btn-retry-wrong');
+            const badge = document.getElementById('wrong-count-badge');
+            const wrongCount = userProg.wrongList ? userProg.wrongList.length : 0;
+
+            if (wrongCount > 0) {
+                btnRetry.disabled = false;
+                btnRetry.onclick = () => {
+                    ui.closeModal('modal-game-options');
+                    startGame(catId, catData, 'retry');
+                };
+                badge.textContent = wrongCount;
+                badge.classList.remove('hidden');
+            } else {
+                btnRetry.disabled = true;
+                badge.classList.add('hidden');
+            }
+        },
+        confirmNewGame: () => {
+            document.getElementById('modal-confirm').classList.remove('hidden');
+        },
+        resetMyProgress: async () => {
+            ui.showScreen('screen-loading');
+            ui.closeModal('modal-confirm');
+            
+            try {
+                const userDocId = currentUserData.safeId || (currentUserData.phone ? currentUserData.phone.replace(/\D/g, '') : null);
+                if (!userDocId) throw new Error("ID not found");
+
+                // ใช้ updateDoc เพื่อเขียนทับ field progress ให้เป็นว่างเปล่า
+                await updateDoc(getDocRef("users", userDocId), {
+                    progress: {},
+                    totalPercent: 0
+                });
+                
+                // อัปเดตข้อมูลในเครื่อง
+                currentUserData.progress = {};
+                currentUserData.totalPercent = 0;
+                
+                loadDashboard();
+                ui.toast("รีเซ็ตข้อมูลเรียบร้อย เริ่มเกมใหม่ได้เลย", 'success');
+            } catch (e) {
+                console.error("Reset Error:", e);
+                // กรณีไม่พบเอกสาร (แปลกๆ) ลองใช้ setDoc แบบ merge ทับ
+                try {
+                     await setDoc(getDocRef("users", userDocId), {
+                        progress: {},
+                        totalPercent: 0
+                    }, { merge: true });
+                    currentUserData.progress = {};
+                    loadDashboard();
+                    ui.toast("รีเซ็ตข้อมูลเรียบร้อย", 'success');
+                } catch(e2) {
+                    ui.toast("รีเซ็ตไม่สำเร็จ: " + e.message, 'error');
+                    loadDashboard();
+                }
+            }
+        },
+        loadLeaderboard: async () => {
+            ui.showScreen('screen-loading');
+            const tbody = document.getElementById('leaderboard-list');
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4">กำลังโหลด...</td></tr>';
+            
+            try {
+                const snap = await getDocs(getCollRef("users"));
+                let users = [];
+                
+                snap.forEach(d => {
+                    const u = d.data();
+                    let totalScore = u.totalScore || 0;
+                    
+                    // Fallback calc if totalScore missing
+                    if (!totalScore && u.progress) {
+                        totalScore = Object.values(u.progress).reduce((acc, curr) => acc + (curr.score || 0), 0);
+                    }
+                    
+                    if (u.name) { // Filter incomplete
+                        users.push({ name: u.name, score: totalScore });
+                    }
+                });
+                
+                // Sort Descending
+                users.sort((a, b) => b.score - a.score);
+                // Top 50
+                users = users.slice(0, 50);
+                
+                tbody.innerHTML = '';
+                if(users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4">ยังไม่มีข้อมูล</td></tr>';
+                }
+                
+                users.forEach((u, index) => {
+                    let rankClass = "text-slate-400";
+                    let rankIcon = "";
+                    if (index === 0) { rankClass = "rank-1 font-bold"; rankIcon = '<i class="fas fa-crown text-yellow-400 ml-2"></i>'; }
+                    else if (index === 1) { rankClass = "rank-2 font-bold"; }
+                    else if (index === 2) { rankClass = "rank-3 font-bold"; }
+                    
+                    const tr = document.createElement('tr');
+                    tr.className = "bg-slate-800 border-b border-slate-700 hover:bg-slate-700";
+                    tr.innerHTML = `
+                        <td class="px-3 py-3 text-center ${rankClass}">${index + 1}</td>
+                        <td class="px-3 py-3 text-white font-medium">${u.name} ${rankIcon}</td>
+                        <td class="px-3 py-3 text-right font-mono text-blue-400">${u.score.toLocaleString()}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                
+                ui.showScreen('screen-leaderboard');
+                
+            } catch (e) {
+                console.error(e);
+                ui.toast("โหลดอันดับไม่สำเร็จ", 'error');
+                loadDashboard();
+            }
+        },
+        toast: (msg, type = 'info') => {
+            const el = document.getElementById('toast');
+            const msgEl = document.getElementById('toast-message');
+            const iconEl = document.getElementById('toast-icon');
+            
+            msgEl.textContent = msg;
+            if(type === 'error') iconEl.innerHTML = '<i class="fas fa-exclamation-circle text-red-400"></i>';
+            else if(type === 'success') iconEl.innerHTML = '<i class="fas fa-check-circle text-green-400"></i>';
+            else iconEl.innerHTML = '<i class="fas fa-info-circle text-blue-400"></i>';
+
+            el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('hidden'), 3000);
+        },
+        closeModal: (id) => {
+            document.getElementById(id).classList.add('hidden');
+        }
+    };
+
+    // --- Initialization Logic ---
+    async function init() {
+        if (!firebaseConfig.apiKey) {
+            ui.showScreen('screen-error');
+            return;
+        }
+
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+
+            // Auth Priority: Custom Token (Canvas) -> Anonymous (Fallback)
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+            
+            // Check if user is already logged in "logically" (in local storage or just show auth)
+            const savedPhone = localStorage.getItem('ref_user_phone');
+            if (savedPhone) {
+                // Sanitize saved phone just in case
+                const safeId = savedPhone.replace(/\D/g, ''); 
+                if(!safeId) {
+                     ui.showScreen('screen-auth');
+                     return;
+                }
+
+                // Try ID fetch first
+                const docRef = getDocRef("users", safeId);
+                const snap = await getDoc(docRef);
+                
+                if (snap.exists()) {
+                    currentUserData = snap.data();
+                    loadDashboard();
+                } else {
+                    // Fallback query
+                    const q = query(getCollRef("users"), where("phone", "==", savedPhone));
+                    const querySnapshot = await getDocs(q);
+                    if (!querySnapshot.empty) {
+                        currentUserData = querySnapshot.docs[0].data();
+                        loadDashboard();
+                    } else {
+                        ui.showScreen('screen-auth');
+                    }
+                }
+            } else {
+                ui.showScreen('screen-auth');
+            }
+
+        } catch (error) {
+            console.error("Init Error", error);
+            ui.toast("เกิดข้อผิดพลาดในการเชื่อมต่อ: " + error.message, 'error');
+            ui.showScreen('screen-error');
+        }
+    }
+
+    // --- Authentication Logic ---
+    window.auth = {
+        login: async () => {
+            const phoneInput = document.getElementById('login-phone').value.trim();
+            if (!phoneInput) return ui.toast('กรุณากรอกเบอร์โทร', 'error');
+
+            // Sanitize: keep only digits
+            const safeId = phoneInput.replace(/\D/g, ''); 
+            if (!safeId || safeId.length < 9) return ui.toast('เบอร์โทรศัพท์ไม่ถูกต้อง (ต้องเป็นตัวเลข)', 'error');
+
+            ui.showScreen('screen-loading');
+            
+            // Guard Auth
+            if (!auth.currentUser) {
+                 try {
+                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (e) {
+                     ui.showScreen('screen-auth');
+                     return ui.toast('Auth Error: ' + e.message, 'error');
+                }
+            }
+
+            try {
+                // Try fetch by ID directly (Faster & Cheaper)
+                const docSnap = await getDoc(getDocRef("users", safeId));
+                
+                if (docSnap.exists()) {
+                    currentUserData = docSnap.data();
+                    localStorage.setItem('ref_user_phone', phoneInput);
+                    loadDashboard();
+                } else {
+                    // Fallback: Try query in case old data used different format (backward compatibility)
+                    const q = query(getCollRef("users"), where("phone", "==", phoneInput));
+                    const snap = await getDocs(q);
+                    if (!snap.empty) {
+                        currentUserData = snap.docs[0].data();
+                        localStorage.setItem('ref_user_phone', phoneInput);
+                        loadDashboard();
+                    } else {
+                        ui.showScreen('screen-auth');
+                        ui.toast('ไม่พบเบอร์โทรนี้ในระบบ กรุณาลงทะเบียน', 'error');
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+                ui.showScreen('screen-auth');
+                ui.toast('Login Error: ' + e.message, 'error');
+            }
+        },
+        register: async () => {
+            const name = document.getElementById('reg-name').value.trim();
+            const phoneInput = document.getElementById('reg-phone').value.trim();
+            const room = document.getElementById('reg-room').value.trim();
+            const year = document.getElementById('reg-year').value.trim();
+
+            if (!name || !phoneInput || !room || !year) return ui.toast('กรุณากรอกข้อมูลให้ครบ', 'error');
+
+            // Sanitize: keep only digits
+            const safeId = phoneInput.replace(/\D/g, '');
+            if (!safeId || safeId.length < 9) return ui.toast('เบอร์โทรศัพท์ต้องเป็นตัวเลขเท่านั้น', 'error');
+
+            ui.showScreen('screen-loading');
+
+            // Guard Auth
+            if (!auth.currentUser) {
+                 try {
+                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (e) {
+                     ui.showScreen('screen-auth');
+                     return ui.toast('Auth Error: ' + e.message, 'error');
+                }
+            }
+
+            try {
+                // Check dup by ID
+                const userDocRef = getDocRef("users", safeId);
+                const docSnap = await getDoc(userDocRef);
+
+                if (docSnap.exists()) {
+                    ui.showScreen('screen-auth');
+                    return ui.toast('เบอร์โทรนี้ถูกลงทะเบียนแล้ว', 'error');
+                }
+
+                const userData = {
+                    name, 
+                    phone: phoneInput, // Store display format
+                    safeId, // Store key format
+                    room, 
+                    year,
+                    createdAt: new Date(),
+                    progress: {}, 
+                    totalPercent: 0
+                };
+
+                await setDoc(userDocRef, userData);
+                
+                currentUserData = userData;
+                localStorage.setItem('ref_user_phone', phoneInput);
+                loadDashboard();
+            } catch (e) {
+                console.error(e);
+                ui.showScreen('screen-auth');
+                ui.toast('บันทึกข้อมูลไม่สำเร็จ: ' + e.message, 'error');
+            }
+        },
+        logout: () => {
+            localStorage.removeItem('ref_user_phone');
+            currentUserData = null;
+            ui.showScreen('screen-auth');
+            document.getElementById('login-phone').value = '';
+        }
+    };
+
+    // --- NEW: Dashboard Logic ---
+    window.loadDashboard = async () => {
+        ui.showScreen('screen-dashboard');
+        document.getElementById('dash-user-name').textContent = currentUserData.name;
+        document.getElementById('dash-user-phone').textContent = currentUserData.phone;
+
+        // Calculate Stats
+        let totalScore = 0;
+        let levelsCleared = 0;
+        
+        if (currentUserData.progress) {
+            Object.values(currentUserData.progress).forEach(p => {
+                totalScore += (p.score || 0);
+                // Counting cleared as "Completed 100%" or just "Played"? 
+                // Let's count as having any score > 0 for now or stick to completion.
+                // Assuming 100% means cleared.
+                if (p.percent === 100) levelsCleared++;
+            });
+        }
+
+        document.getElementById('dash-total-score').textContent = totalScore;
+        document.getElementById('dash-levels-cleared').textContent = levelsCleared;
+
+        // Rank Title Logic
+        let rankTitle = "ช่างฝึกหัด (Beginner)";
+        let rankColor = "text-slate-400";
+        if (totalScore >= 1000) { rankTitle = "ปรมาจารย์ (Grand Master)"; rankColor = "text-yellow-400 font-bold"; }
+        else if (totalScore >= 500) { rankTitle = "วิศวกร (Expert Engineer)"; rankColor = "text-blue-400 font-bold"; }
+        else if (totalScore >= 200) { rankTitle = "ช่างชำนาญการ (Professional)"; rankColor = "text-green-400 font-bold"; }
+        else if (totalScore >= 50) { rankTitle = "ช่างเทคนิค (Technician)"; rankColor = "text-white font-bold"; }
+        
+        const rankEl = document.getElementById('dash-user-rank');
+        if (!rankEl) {
+            const container = document.getElementById('dash-user-name').parentElement;
+            const newRank = document.createElement('p');
+            newRank.id = 'dash-user-rank';
+            newRank.className = `text-sm mt-1 pb-2 border-b border-white/10 ${rankColor}`;
+            newRank.textContent = rankTitle;
+            container.appendChild(newRank);
+        } else {
+            rankEl.className = `text-sm mt-1 pb-2 border-b border-white/10 ${rankColor}`;
+            rankEl.textContent = rankTitle;
+        }
+    };
+
+    // --- Level List Logic ---
+    window.loadLevelList = async () => {
+        ui.showScreen('screen-level-list');
+        document.getElementById('user-display-name').textContent = currentUserData.name;
+        document.getElementById('user-display-phone').textContent = currentUserData.phone;
+        
+        // Load Categories (Levels)
+        const listEl = document.getElementById('level-list');
+        listEl.innerHTML = '<div class="loader mx-auto"></div>';
+
+        try {
+            const q = query(getCollRef("categories"), orderBy("title")); // Simple ordering
+            const snap = await getDocs(q);
+            
+            listEl.innerHTML = '';
+            
+            if(snap.empty) {
+                listEl.innerHTML = '<p class="text-center text-slate-500">ยังไม่มีด่านให้เล่น (รอ Admin สร้าง)</p>';
+                document.getElementById('total-progress').textContent = '0%';
+                document.getElementById('total-progress-bar').style.width = '0%';
+                return;
+            }
+
+            let totalPercentSum = 0;
+            let categoryCount = 0;
+            let grandTotalScore = 0;
+
+            snap.forEach(docSnap => {
+                const cat = docSnap.data();
+                const catId = docSnap.id;
+                categoryCount++;
+                
+                // Get user progress for this cat
+                const userProg = currentUserData.progress && currentUserData.progress[catId] ? currentUserData.progress[catId] : { percent: 0, score: 0 };
+                totalPercentSum += userProg.percent;
+                grandTotalScore += (userProg.score || 0);
+                
+                const card = document.createElement('div');
+                card.className = "bg-slate-800 p-4 rounded-xl shadow border border-slate-700 flex justify-between items-center transform transition hover:scale-[1.02] active:scale-95 cursor-pointer";
+                // Show options modal
+                card.onclick = () => ui.showGameOptions(catId, cat, userProg);
+
+                card.innerHTML = `
+                    <div class="flex-1">
+                        <h4 class="font-bold text-white text-lg">${cat.title}</h4>
+                        <div class="flex items-center text-xs text-slate-400 mt-1">
+                            <span class="mr-3"><i class="fas fa-clock"></i> ${cat.timeLimit || 30} วิ/ข้อ</span>
+                        </div>
+                        <div class="mt-2 w-full bg-slate-900 rounded-full h-1.5 max-w-[150px]">
+                            <div class="bg-blue-500 h-1.5 rounded-full" style="width: ${userProg.percent}%"></div>
+                        </div>
+                    </div>
+                    <div class="ml-4 text-center min-w-[70px]">
+                        <span class="block text-2xl font-bold ${userProg.percent === 100 ? 'text-green-400' : 'text-slate-600'}">
+                            ${userProg.percent}%
+                        </span>
+                        <span class="block text-xs text-yellow-400 font-medium mt-1">
+                            ${userProg.score || 0} คะแนน
+                        </span>
+                        ${userProg.percent === 100 ? '<i class="fas fa-check-circle text-green-500 mt-1"></i>' : '<button class="bg-blue-600 text-white px-3 py-1 rounded text-xs mt-1">เล่น</button>'}
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+
+            // Calculate and Update Total Progress Here
+            const overallPercent = categoryCount > 0 ? Math.round(totalPercentSum / categoryCount) : 0;
+            document.getElementById('total-progress').textContent = `${overallPercent}%`;
+            document.getElementById('total-progress-bar').style.width = `${overallPercent}%`;
+            document.getElementById('grand-total-score').textContent = `คะแนนรวม: ${grandTotalScore}`;
+
+        } catch (e) {
+            console.error(e);
+            listEl.innerHTML = '<p class="text-red-400">โหลดข้อมูลไม่สำเร็จ</p>';
+        }
+    }
+
+    function updateTotalProgressUI() {}
+
+    // --- Game Logic ---
+
+    async function startGame(catId, catData, mode = 'new') {
+        ui.showScreen('screen-loading');
+        state.activeCategory = { id: catId, ...catData };
+        state.score = 0;
+        state.correctCount = 0; 
+        state.currentQuestionIndex = 0;
+        state.wrongQuestionIds = []; // Reset tracked wrongs for this session
+        state.gameMode = mode;
+        
+        try {
+            // Fetch questions
+            const q = query(getCollRef("questions"), where("categoryId", "==", catId));
+            const snap = await getDocs(q);
+            
+            if(snap.empty) {
+                ui.toast("ยังไม่มีคำถามในด่านนี้", 'error');
+                loadLevelList();
+                return;
+            }
+
+            let allQuestions = [];
+            snap.forEach(d => allQuestions.push({id: d.id, ...d.data()}));
+            
+            // Store total count for accurate percent calculation later
+            state.totalQuestionsInCategory = allQuestions.length;
+
+            // Shuffle Helper (Fisher-Yates)
+            const shuffle = (array) => {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+                return array;
+            };
+
+            if (mode === 'retry') {
+                const userProg = currentUserData.progress[catId];
+                const wrongList = userProg && userProg.wrongList ? userProg.wrongList : [];
+                state.questions = shuffle(allQuestions.filter(q => wrongList.includes(q.id)));
+                if (state.questions.length === 0) {
+                    ui.toast("ไม่มีข้อที่ตอบผิดเหลืออยู่!", 'success');
+                    loadLevelList();
+                    return;
+                }
+            } else {
+                state.questions = shuffle(allQuestions);
+            }
+            
+            ui.showScreen('screen-game');
+            // Init score display
+            document.getElementById('ingame-score').textContent = state.score;
+            document.getElementById('feedback-overlay').classList.add('hidden');
+            
+            // Try to play audio
+            const audio = document.getElementById('bg-music');
+            if(audio) {
+                audio.volume = 0.3;
+                audio.play().catch(e => console.log("Audio play blocked (user gesture required)", e));
+            }
+            
+            renderQuestion();
+
+        } catch (e) {
+            console.error(e);
+            ui.toast("Error starting game", 'error');
+            loadLevelList();
+        }
+    }
+
+    function renderQuestion() {
+        const qData = state.questions[state.currentQuestionIndex];
+        const timeLimit = state.activeCategory.timeLimit || 30;
+        
+        // Reset UI
+        document.getElementById('q-counter').textContent = `คำถามที่ ${state.currentQuestionIndex + 1}/${state.questions.length}`;
+        document.getElementById('q-text').textContent = qData.text;
+        document.getElementById('game-progress').style.width = `${((state.currentQuestionIndex) / state.questions.length) * 100}%`;
+        
+        // Reset Time Bar
+        const timeBar = document.getElementById('timer-bar');
+        timeBar.style.width = '100%';
+        timeBar.classList.remove('bg-red-500', 'bg-yellow-500');
+        timeBar.classList.add('bg-blue-500');
+        
+        // Hide Feedback
+        document.getElementById('feedback-overlay').classList.add('hidden');
+
+        // Choices
+        // Choices Shuffling using Fisher-Yates
+        const shuffle = (array) => {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        };
+        const choices = [qData.right, ...qData.wrongs];
+        const shuffledChoices = shuffle(choices.map(c => ({ text: c, isCorrect: c === qData.right })));
+        
+        const container = document.getElementById('choices-container');
+        container.innerHTML = '';
+        
+        shuffledChoices.forEach(choice => {
+            const btn = document.createElement('button');
+            btn.className = "w-full text-left bg-slate-800 hover:bg-slate-700 border border-slate-600 p-4 rounded-xl text-white font-medium transition active:scale-95";
+            btn.textContent = choice.text;
+            btn.onclick = () => answer(choice.isCorrect, btn);
+            container.appendChild(btn);
+        });
+
+        // Timer
+        clearInterval(state.timer);
+        state.timeLeft = timeLimit;
+        updateTimerDisplay();
+        state.timer = setInterval(() => {
+            state.timeLeft--;
+            updateTimerDisplay();
+            if(state.timeLeft <= 0) {
+                clearInterval(state.timer);
+                ui.toast("หมดเวลา!", 'error');
+                // Auto answer incorrect on timeout
+                const currentQ = state.questions[state.currentQuestionIndex];
+                if(currentQ) state.wrongQuestionIds.push(currentQ.id);
+                // Show wrong feedback momentarily then next
+                showFeedback(false);
+                setTimeout(nextQuestion, 1500);
+            }
+        }, 1000);
+    }
+
+    function updateTimerDisplay() {
+        const min = Math.floor(state.timeLeft / 60);
+        const sec = state.timeLeft % 60;
+        document.getElementById('game-timer').textContent = `${min}:${sec < 10 ? '0'+sec : sec}`;
+        
+        // Update Time Bar Width
+        const totalTime = state.activeCategory.timeLimit || 30;
+        const percent = (state.timeLeft / totalTime) * 100;
+        const bar = document.getElementById('timer-bar');
+        bar.style.width = `${percent}%`;
+        
+        // Update Color
+        if(percent < 30) {
+            bar.classList.remove('bg-blue-500', 'bg-yellow-500');
+            bar.classList.add('bg-red-500');
+        } else if(percent < 60) {
+            bar.classList.remove('bg-blue-500', 'bg-red-500');
+            bar.classList.add('bg-yellow-500');
+        } else {
+            bar.classList.remove('bg-yellow-500', 'bg-red-500');
+            bar.classList.add('bg-blue-500');
+        }
+    }
+
+    function answer(isCorrect, btnElement) {
+        clearInterval(state.timer);
+        const btns = document.getElementById('choices-container').children;
+        for(let b of btns) b.disabled = true;
+
+        if (isCorrect) {
+            btnElement.classList.remove('bg-slate-800');
+            btnElement.classList.add('bg-green-600', 'border-green-400');
+            document.getElementById('sfx-correct').play();
+            
+            // Score Calculation: Base 10 + Speed Bonus + Combo Bonus
+            const baseScore = 10;
+            const timeBonus = Math.floor(state.timeLeft / 2); // Simple bonus
+            state.combo++;
+            if (state.combo > state.maxCombo) state.maxCombo = state.combo;
+            
+            // Multiplier: Every 3 combos increase multiplier
+            const multiplier = 1 + (Math.floor(state.combo / 3) * 0.5); // 3=1.5x, 6=2x, 9=2.5x
+            const addedScore = Math.floor((baseScore + timeBonus) * multiplier);
+            
+            state.score += addedScore;
+            state.correctCount++;
+            
+            // Update Score UI
+            document.getElementById('ingame-score').textContent = state.score;
+        } else {
+            btnElement.classList.remove('bg-slate-800');
+            btnElement.classList.add('bg-red-600', 'border-red-400');
+            document.getElementById('sfx-wrong').play();
+            
+            state.combo = 0; // Reset combo
+            
+            // Record Wrong Question ID
+            const currentQ = state.questions[state.currentQuestionIndex];
+            if(currentQ) state.wrongQuestionIds.push(currentQ.id);
+        }
+        
+        // Update Combo UI
+        const comboEl = document.getElementById('combo-display');
+        if (state.combo >= 2) {
+            comboEl.classList.remove('hidden');
+            document.getElementById('combo-count').textContent = `x${state.combo}`;
+            // Add pop animation
+            comboEl.classList.add('scale-110');
+            setTimeout(() => comboEl.classList.remove('scale-110'), 200);
+        } else {
+            comboEl.classList.add('hidden');
+        }
+        
+        showFeedback(isCorrect);
+        setTimeout(nextQuestion, 1500);
+    }
+    
+    function showFeedback(isCorrect) {
+        const overlay = document.getElementById('feedback-overlay');
+        const icon = document.getElementById('feedback-icon');
+        const text = document.getElementById('feedback-text');
+        const scoreText = document.getElementById('feedback-score');
+        
+        overlay.classList.remove('hidden');
+        overlay.classList.add('pop-in');
+
+        if (isCorrect) {
+            icon.className = "fas fa-check-circle text-green-400 text-8xl mb-4 drop-shadow-2xl";
+            text.textContent = "ถูกต้อง!";
+            text.className = "text-5xl font-bold text-green-400 drop-shadow-lg tracking-wider";
+
+            const timeBonus = Math.floor(state.timeLeft / 2);
+            const multiplier = 1 + (Math.floor(state.combo / 3) * 0.5);
+            const addedScore = Math.floor((10 + timeBonus) * multiplier);
+            scoreText.textContent = `+${addedScore} คะแนน ${state.combo >= 3 ? '(Combo x' + multiplier + '!)' : ''}`;
+        } else {
+            icon.className = "fas fa-times-circle text-red-500 text-8xl mb-4 drop-shadow-2xl";
+            text.textContent = "ผิด!";
+            text.className = "text-5xl font-bold text-red-500 drop-shadow-lg tracking-wider";
+            scoreText.textContent = "";
+        }
+        
+        setTimeout(() => {
+            overlay.classList.remove('pop-in');
+        }, 1400);
+    }
+
+    async function nextQuestion() {
+        state.currentQuestionIndex++;
+        if (state.currentQuestionIndex < state.questions.length) {
+            renderQuestion();
+        } else {
+            finishGame();
+        }
+    }
+
+    async function finishGame() {
+        document.getElementById('bg-music').pause();
+        
+        const catId = state.activeCategory.id;
+        
+        // Ensure structure exists
+        if (!currentUserData) {
+            ui.toast("เกิดข้อผิดพลาด: ไม่พบข้อมูลผู้ใช้", 'error');
+            return loadLevelList();
+        }
+        if (!currentUserData.progress) currentUserData.progress = {};
+        
+        // SAFEGUARD: Initialize existingEntry to empty object if undefined
+        const existingEntry = currentUserData.progress[catId] || {};
+        
+        const newEntry = { ...existingEntry }; // Copy existing or init
+        if (!newEntry.timestamp) {
+             newEntry.score = 0;
+             newEntry.percent = 0;
+             newEntry.wrongList = [];
+        }
+        
+        // Determine ID (use safeId if available, else sanitize phone)
+        const userDocId = currentUserData.safeId || (currentUserData.phone ? currentUserData.phone.replace(/\D/g, '') : null);
+
+        if (!userDocId) {
+            ui.toast("ไม่สามารถบันทึกได้: รหัสผู้ใช้ไม่ถูกต้อง", 'error');
+            return;
+        }
+
+        let displayPercent = 0;
+
+        if (state.gameMode === 'new') {
+            // New Game: Overwrite everything if score better or equal
+            // Calculate Percent based on current session
+            // New Game: Reset score and percent for this category session
+            // Calculate Percent based on current session
+            const totalQ = state.totalQuestionsInCategory || state.questions.length;
+            const percent = Math.round((state.correctCount / totalQ) * 100);
+            displayPercent = percent;
+
+            // Always update to current session results to prevent cumulative score farming
+            newEntry.score = state.score;
+            newEntry.percent = percent;
+            newEntry.wrongList = state.wrongQuestionIds;
+            newEntry.timestamp = new Date();
+
+        } else if (state.gameMode === 'retry') {
+            // Retry Mode: Add Score + Update Percent + Update Wrong List
+            
+            // 1. Add Score (Previous + New Session)
+            newEntry.score = (existingEntry.score || 0) + state.score;
+            
+            // 2. Update Wrong List (Only keep questions that are STILL wrong in this session)
+            // Logic: `state.wrongQuestionIds` holds questions wrong in THIS retry session.
+            // Since retry session covers ALL previous wrongs, the new wrong list is just `state.wrongQuestionIds`.
+            newEntry.wrongList = state.wrongQuestionIds;
+            
+            // 3. Recalculate Percent (Total Correct / Total Questions)
+            const totalQ = state.totalQuestionsInCategory;
+            // Total Correct = Total Q - Remaining Wrong
+            const totalCorrect = totalQ - newEntry.wrongList.length;
+            const percent = Math.round((totalCorrect / totalQ) * 100);
+            newEntry.percent = percent;
+            displayPercent = percent;
+            
+            newEntry.timestamp = new Date();
+        }
+
+        // Celebration Confetti
+        if (displayPercent === 100) {
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#3b82f6', '#22c55e', '#fbbf24']
+            });
+        }
+
+        // Calculate new total score for the user
+        // Update local progress so we can sum it up accurately
+        currentUserData.progress[catId] = newEntry;
+        
+        let newTotalScore = 0;
+        if (currentUserData.progress) {
+            Object.values(currentUserData.progress).forEach(p => {
+                newTotalScore += (p.score || 0);
+            });
+        }
+
+        // Display Result Screen
+        ui.showScreen('screen-result');
+        document.getElementById('result-title').textContent = state.activeCategory.title;
+        document.getElementById('result-score').textContent = newEntry.score; // Show Cumulative Score
+        document.getElementById('result-time').textContent = `${displayPercent}% ถูกต้อง`;
+
+        try {
+            await setDoc(getDocRef("users", userDocId), {
+                progress: {
+                    [catId]: newEntry
+                },
+                totalScore: newTotalScore // Save total score for leaderboard sorting
+            }, { merge: true });
+            
+            if (state.gameMode === 'new') {
+                ui.toast(`บันทึกคะแนนสำเร็จ!`, 'success');
+            } else {
+                ui.toast(`บันทึกคะแนนเพิ่มเติมแล้ว! (รวม ${newEntry.score})`, 'success');
+            }
+        } catch (e) {
+            console.error("Save Error:", e);
+            ui.toast("บันทึกไม่สำเร็จ: " + e.message, 'error');
+        }
+    }
+
+    window.game = {
+        quit: () => {
+            clearInterval(state.timer);
+            document.getElementById('bg-music').pause();
+            loadLevelList();
+        },
+        retry: () => {
+             startGame(state.activeCategory.id, state.activeCategory, state.gameMode);
+        }
+    };
+
+    // --- Admin Logic ---
+    window.admin = {
+        login: () => {
+            const pass = document.getElementById('admin-passcode').value;
+            if (pass === 'ptech8888') {
+                state.isAdmin = true;
+                ui.showScreen('screen-admin-dash');
+                admin.loadCategories();
+            } else {
+                ui.toast('รหัสผ่านผิด', 'error');
+            }
+        },
+        showTab: (tabId) => {
+            if (tabId === 'manage-cats') {
+                document.getElementById('admin-tab-cats').classList.remove('hidden');
+                document.getElementById('admin-tab-users').classList.add('hidden');
+                admin.loadCategories();
+            } else {
+                document.getElementById('admin-tab-cats').classList.add('hidden');
+                document.getElementById('admin-tab-users').classList.remove('hidden');
+                admin.loadUsers();
+            }
+        },
+        // Categories
+        loadCategories: async () => {
+            const list = document.getElementById('admin-cat-list');
+            list.innerHTML = 'Loading...';
+            const snap = await getDocs(query(getCollRef("categories"), orderBy("title")));
+            list.innerHTML = '';
+            snap.forEach(d => {
+                const data = d.data();
+                const div = document.createElement('div');
+                div.className = "bg-slate-800 p-3 rounded flex justify-between items-center";
+                div.innerHTML = `
+                    <span>${data.title} (${data.timeLimit}s)</span>
+                    <div>
+                        <button onclick="admin.manageQuestions('${d.id}', '${data.title}')" class="text-blue-400 mr-2 text-sm">คำถาม</button>
+                        <button onclick="admin.editCat('${d.id}', '${data.title}', ${data.timeLimit})" class="text-yellow-400 mr-2 text-sm">แก้ไข</button>
+                        <button onclick="admin.deleteCat('${d.id}')" class="text-red-400 text-sm">ลบ</button>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        },
+        openAddCatModal: () => {
+            document.getElementById('cat-id').value = '';
+            document.getElementById('cat-title').value = '';
+            document.getElementById('cat-time').value = '30';
+            document.getElementById('modal-cat').classList.remove('hidden');
+        },
+        saveCategory: async () => {
+            const id = document.getElementById('cat-id').value;
+            const title = document.getElementById('cat-title').value;
+            const timeLimit = parseInt(document.getElementById('cat-time').value);
+            
+            if(!title) return ui.toast('ใส่ชื่อด่าน', 'error');
+
+            try {
+                if(id) {
+                    await updateDoc(getDocRef("categories", id), { title, timeLimit });
+                } else {
+                    await addDoc(getCollRef("categories"), { title, timeLimit, createdAt: new Date() });
+                }
+                ui.closeModal('modal-cat');
+                admin.loadCategories();
+                ui.toast('บันทึกเรียบร้อย', 'success');
+            } catch(e) { ui.toast(e.message, 'error'); }
+        },
+        deleteCat: async (id) => {
+            if(confirm('ลบด่านนี้และคำถามทั้งหมด?')) {
+                await deleteDoc(getDocRef("categories", id));
+                // Technically should delete sub-questions too, but for prototype let's leave orphan data or handle later
+                admin.loadCategories();
+            }
+        },
+        editCat: (id, title, time) => {
+            document.getElementById('cat-id').value = id;
+            document.getElementById('cat-title').value = title;
+            document.getElementById('cat-time').value = time;
+            document.getElementById('modal-cat').classList.remove('hidden');
+        },
+        // Questions
+        manageQuestions: async (catId, catTitle) => {
+            document.getElementById('admin-question-section').classList.remove('hidden');
+            document.getElementById('admin-current-cat-name').textContent = catTitle;
+            document.getElementById('admin-current-cat-name').dataset.id = catId;
+            
+            const list = document.getElementById('admin-question-list');
+            list.innerHTML = 'Loading...';
+            
+            const q = query(getCollRef("questions"), where("categoryId", "==", catId));
+            const snap = await getDocs(q);
+            list.innerHTML = '';
+            
+            snap.forEach(d => {
+                const data = d.data();
+                const item = document.createElement('div');
+                item.className = "bg-slate-700 p-3 rounded text-sm";
+                item.innerHTML = `
+                    <p class="font-bold text-white mb-1">${data.text}</p>
+                    <p class="text-green-400 text-xs">ถูก: ${data.right}</p>
+                    <div class="flex justify-end mt-2">
+                         <button onclick="admin.deleteQuestion('${d.id}', '${catId}', '${catTitle}')" class="text-red-400 text-xs border border-red-400 px-2 py-1 rounded hover:bg-red-400 hover:text-white">ลบ</button>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        },
+        closeQuestionSection: () => {
+            document.getElementById('admin-question-section').classList.add('hidden');
+        },
+        openAddQuestionModal: () => {
+            document.getElementById('q-id').value = '';
+            document.getElementById('q-text-input').value = '';
+            document.getElementById('q-right').value = '';
+            document.getElementById('wrong-answers-container').innerHTML = `
+                <label class="text-xs text-slate-400">ตัวลวง 1</label>
+                <input type="text" class="input-field border-red-900 wrong-ans-input">
+            `;
+            document.getElementById('modal-q').classList.remove('hidden');
+        },
+        openImportModal: () => {
+            document.getElementById('import-text').value = '';
+            document.getElementById('modal-import').classList.remove('hidden');
+        },
+        addWrongChoiceField: () => {
+            const container = document.getElementById('wrong-answers-container');
+            const count = container.querySelectorAll('.wrong-ans-input').length + 1;
+            const div = document.createElement('div');
+            div.innerHTML = `
+                <label class="text-xs text-slate-400">ตัวลวง ${count}</label>
+                <input type="text" class="input-field border-red-900 wrong-ans-input">
+            `;
+            container.appendChild(div);
+        },
+        saveQuestion: async () => {
+            const catId = document.getElementById('admin-current-cat-name').dataset.id;
+            const text = document.getElementById('q-text-input').value;
+            const right = document.getElementById('q-right').value;
+            
+            const wrongs = [];
+            document.querySelectorAll('.wrong-ans-input').forEach(input => {
+                if(input.value.trim()) wrongs.push(input.value.trim());
+            });
+            
+            if(!text || !right || wrongs.length === 0) return ui.toast('กรอกข้อมูลให้ครบ', 'error');
+            
+            try {
+                await addDoc(getCollRef("questions"), {
+                    categoryId: catId,
+                    text,
+                    right,
+                    wrongs,
+                    createdAt: new Date()
+                });
+                ui.closeModal('modal-q');
+                // Reload list
+                const catName = document.getElementById('admin-current-cat-name').textContent;
+                admin.manageQuestions(catId, catName);
+                ui.toast('เพิ่มคำถามแล้ว', 'success');
+            } catch(e) { ui.toast(e.message, 'error'); }
+        },
+        importQuestions: async () => {
+            const catId = document.getElementById('admin-current-cat-name').dataset.id;
+            const text = document.getElementById('import-text').value.trim();
+            if(!text) return ui.toast('กรุณาใส่ข้อมูล', 'error');
+
+            const lines = text.split('\n');
+            let count = 0;
+            
+            ui.showScreen('screen-loading');
+            
+            try {
+                for(let line of lines) {
+                    const parts = line.split(',').map(s => s.trim()).filter(s => s);
+                    if(parts.length >= 3) { // At least Q, Right, Wrong1
+                        const qText = parts[0];
+                        const right = parts[1];
+                        const wrongs = parts.slice(2);
+                        
+                        await addDoc(getCollRef("questions"), {
+                            categoryId: catId,
+                            text: qText,
+                            right: right,
+                            wrongs: wrongs,
+                            createdAt: new Date()
+                        });
+                        count++;
+                    }
+                }
+                
+                ui.closeModal('modal-import');
+                ui.showScreen('screen-admin-dash');
+                const catName = document.getElementById('admin-current-cat-name').textContent;
+                admin.manageQuestions(catId, catName);
+                ui.toast(`นำเข้าสำเร็จ ${count} ข้อ`, 'success');
+            } catch(e) {
+                console.error(e);
+                ui.showScreen('screen-admin-dash');
+                ui.toast('เกิดข้อผิดพลาด: ' + e.message, 'error');
+            }
+        },
+        deleteQuestion: async (qId, catId, catName) => {
+            if(confirm('ลบคำถามนี้?')) {
+                await deleteDoc(getDocRef("questions", qId));
+                admin.manageQuestions(catId, catName);
+            }
+        },
+        // Seed Data
+        seedData: async () => {
+            // REMOVED confirm() to allow running in iframe
+            ui.showScreen('screen-loading');
+            const data = [
+                {
+                    title: "ด่านที่ 1 เครื่องมือช่างสำหรับงานเครื่องทำความเย็น",
+                    timeLimit: 30,
+                    questions: [
+                        { q: "แมนิโฟร์เกจ ใช้งานอย่างไร", right: "ถูกทุกข้อ", wrong: ["ต่อเพื่อเติมน้ำยา", "ต่อเพื่อเช็คน้ำยา", "ต่อเพื่อทำสุญญากาศ"] },
+                        { q: "แวคคั้มปั๊ม ใช้งานอย่างไร", right: "ใช้ดูดอากาศเพื่อทำสุญญากาศ", wrong: ["ใช้ดูดและอัดสารทำความเย็นสถานะของเหลว", "ใช้ต่อเพื่อเติมน้ำยา", "ใช้เชื่อมท่อ"] },
+                        { q: "เครื่องมือใด ใช้ในงานตัดท่อทองแดง", right: "คัตเตอร์ตัดท่อ", wrong: ["กรรไกรตัดท่อพีวีซี", "คัตเตอร์", "กรรไกร"] },
+                        { q: "รีมเมอร์ คืออะไร", right: "ลบคมท่อ", wrong: ["ตัดท่อ", "เชื่อมท่อ", "บานท่อ"] },
+                        { q: "ชุดบานแฟร์ ประกอบไปด้วยอะไรบ้าง", right: "ตัวบาน, ตัวจับท่อ", wrong: ["คัตเตอร์ตัดท่อ, ตัวบาน", "ตัวบาน, รีมเมอร์", "ตัวจับท่อ, คัตเตอร์ตัดท่อ"] },
+                        { q: "เบนเดอร์ คืออะไร", right: "ใช้ดัดท่อ", wrong: ["ใช้บานท่อ", "ใช้ขยายท่อ", "ใช้เชื่อมท่อ"] },
+                        { q: "เซฟตี้วาล์ว คืออะไร", right: "อุปกรณ์ป้องกันน้ำยาพุ่ง", wrong: ["อุปกรณ์ป้องกันนิ้วมือ", "อุปกรณ์ป้องกันคอมเพรสเซอร์", "อุปกรณ์ป้องกันดวงตา"] },
+                        { q: "ข้อใด ไม่ใช่ เครื่องมือขยายท่อ", right: "คีมล็อค", wrong: ["คีมถ่างท่อ", "แท่งตอก", "ชุดบานขยายท่อ"] },
+                        { q: "เกจที่ติดอยู่กับชุดเชื่อมสนามคืออะไร", right: "Pressure gauge", wrong: ["Manifold gauge", "Col gate", "Logic gate"] }
+                    ]
+                },
+                {
+                    title: "ด่านที่ 2 หลักการทำงานและส่วนประกอบ",
+                    timeLimit: 30,
+                    questions: [
+                         { q: "คอมเพรสเซอร์ ทำหน้าที่อะไร", right: "ดูดและอัดสารทำความเย็นสถานะไอ", wrong: ["ดูดสารทำความเย็นสถานะไอ", "อัดสารทำความเย็นสถานะไอ", "ดูดและอัดสารทำความเย็นสถานะของเหลว"] },
+                         { q: "คอนเดนเซอร์ทำหน้าที่อะไร", right: "เปลี่ยนสารทำความเย็นจากสถานะไอเป็นของเหลว", wrong: ["เปลี่ยนสารทำความเย็นจากสถานะของเหลวเป็นไอ", "ดูดและอัดสารทำความเย็นสถานะไอ", "ลดแรงดันอุณหภูมิสารทำความเย็น"] },
+                         { q: "แคปพิลารี่ทิ้วบ์ทำหน้าที่อะไร", right: "ลดแรงดันอุณหภูมิสารทำความเย็น", wrong: ["ดูดสารทำความเย็นสถานะของเหลว", "เปลี่ยนสารทำความเย็นจากสถานะของเหลวเป็นไอ", "อัดสารทำความเย็นสถานะไอ"] },
+                         { q: "อีวาพอเรเตอร์ทำหน้าที่อะไร", right: "เปลี่ยนสารทำความเย็นจากสถานะของเหลวเป็นไอ", wrong: ["ลดแรงดันอุณหภูมิสารทำความเย็น", "ดูดและอัดสารทำความเย็นสถานะไอ", "ดูดและอัดสารทำความเย็นสถานะของเหลว"] },
+                         { q: "โอเวอร์โหลดทำหน้าที่อะไร", right: "ตัดการทำงานของคอมเพรสเซอร์ หากกระแสเกิน", wrong: ["ควบคุมสารทำความเย็น", "ควบคุมอุณหภูมิ ของเครื่องทำความเย็น", "ตัดและต่อวงจรไฟฟ้าของขดลวดสตาร์ท"] },
+                         { q: "เคอร์เรนรีเลย์ทำหน้าที่อะไร", right: "ตัดและต่อวงจรไฟฟ้าของขดลวดสตาร์ท", wrong: ["ควบคุมอุณหภูมิ ของเครื่องทำความเย็น", "ตัดการทำงานของคอมเพรสเซอร์ หากกระแสเกิน", "ควบคุมสารทำความเย็น"] },
+                         { q: "เทอร์โมสตัททำหน้าที่อะไร", right: "ควบคุมอุณหภูมิ ของเครื่องทำความเย็น", wrong: ["ตัดและต่อวงจรไฟฟ้าของขดลวดสตาร์ท", "ตัดการทำงานของคอมเพรสเซอร์ หากกระแสเกิน", "ควบคุมสารทำความเย็น"] },
+                         { q: "ข้อใดคือสารทำความเย็นสำหรับตู้กดน้ำ", right: "R-134a", wrong: ["R-22", "R-32", "R-1000"] },
+                         { q: "ฟิลเตอร์ไดร์เออร์สแตนเนอร์ อยู่ในอุปกรณ์ใด", right: "แคปพิลารี่ทิ้วบ์", wrong: ["คอนเดนเซอร์", "อีวาพอเรเตอร์", "คอมเพรสเซอร์"] },
+                         { q: "ขดลวดของคอมเพรสเซอร์ มีขาใดบ้าง", right: "คอมม่อน, รัน, สตาร์ท", wrong: ["คอมม่อน, รัน, สปาร์ค", "ดิจิม่อน, รัน, สตาร์ท", "รัน, สตาร์ท, โดเรม่อน"] },
+                         { q: "เครื่องทำความเย็น ภาษาอังกฤษ ชื่อว่าอะไร", right: "Refrigeration", wrong: ["Cooling", "Cold", "Air"] }
+                    ]
+                },
+                {
+                    title: "ด่านที่ 3 การติดตั้ง ซ่อมบำรุง และทักษะ",
+                    timeLimit: 45,
+                    questions: [
+                        { q: "1 นิ้ว เท่ากับกี่เซนติเมตร", right: "2.54 เซนติเมตร", wrong: ["2 เซนติเมตร", "25.4 เซนติเมตร", "2.5 เซนติเมตร"] },
+                        { q: "1 นิ้ว เท่ากับกี่หุน", right: "8 หุน", wrong: ["10 หุน", "9 หุน", "7 หุน"] },
+                        { q: "1/2 นิ้ว เท่ากับกี่หุน", right: "4 หุน", wrong: ["6 หุน", "1 หุนครึ่ง", "หุนครึ่ง"] },
+                        { q: "1/4 นิ้ว เท่ากับกี่หุน", right: "2 หุน", wrong: ["4 หุน", "6 หุน", "2 หุนครึ่ง"] },
+                        { q: "3/8 นิ้ว เท่ากับกี่หุน", right: "3 หุน", wrong: ["1 หุน", "2 หุน", "4 หุน"] },
+                        { q: "5/16 นิ้ว เท่ากับกี่หุน", right: "2 หุนครึ่ง", wrong: ["2 หุน", "3 หุนครึ่ง", "3 หุน"] },
+                        { q: "15/16 นิ้ว เท่ากับกี่หุน", right: "7 หุนครึ่ง", wrong: ["6 หุน", "7 หุน", "6 หุนครึ่ง"] },
+                        { q: "3/4 นิ้ว เท่ากับกี่หุน", right: "6 หุน", wrong: ["7 หุน", "6 หุนครึ่ง", "7 หุนครึ่ง"] },
+                        { q: "เปลวไฟแบบใด เหมาะกับงานเชื่อมท่อทองแดง", right: "เปลวกลาง", wrong: ["เปลวลด", "เปลวเพิ่ม", "เปลวเพลิง"] },
+                        { q: "ในการสุญญากาศ ต้อให้เข็มหยุดอยู่ที่เลขใด", right: "-30 Psig", wrong: ["0 Psig", "30 Psig", "-0 Psig"] }
+                    ]
+                }
+            ];
+            
+            try {
+                for (const cat of data) {
+                    // Create Category
+                    const catRef = await addDoc(getCollRef("categories"), {
+                        title: cat.title,
+                        timeLimit: cat.timeLimit,
+                        createdAt: new Date()
+                    });
+                    
+                    // Create Questions
+                    for (const q of cat.questions) {
+                        await addDoc(getCollRef("questions"), {
+                            categoryId: catRef.id,
+                            text: q.q,
+                            right: q.right,
+                            wrongs: q.wrong,
+                            createdAt: new Date()
+                        });
+                    }
+                }
+                ui.showScreen('screen-admin-dash');
+                admin.loadCategories();
+                ui.toast('ติดตั้งข้อมูลสำเร็จ!', 'success');
+            } catch (e) {
+                console.error("Seed error:", e);
+                ui.showScreen('screen-admin-dash');
+                ui.toast('เกิดข้อผิดพลาด: ' + e.message, 'error');
+            }
+        },
+        // Users
+        loadUsers: async () => {
+            const tbody = document.getElementById('admin-user-table');
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
+            
+            const snap = await getDocs(getCollRef("users"));
+            tbody.innerHTML = '';
+            
+            // To display columns for categories properly, we need to know all categories.
+            // Simplified: Just JSON dump score or loop through known keys.
+            // Let's list simplified.
+            
+            snap.forEach(d => {
+                const u = d.data();
+                let scoreCells = '';
+                
+                // Mock logic for D1, D2, D3 columns (assuming admin created cats and we map loosely)
+                // Just showing raw summary for now
+                const scores = u.progress ? Object.values(u.progress).map(p => p.score).join(', ') : '-';
+                
+                const tr = document.createElement('tr');
+                tr.className = "bg-slate-800 border-b border-slate-700 hover:bg-slate-700";
+                tr.innerHTML = `
+                    <td class="px-3 py-2 font-medium text-white">${u.name}<br><span class="text-xs text-slate-500">${u.phone}</span></td>
+                    <td class="px-3 py-2">${u.room || '-'}/${u.year || '-'}</td>
+                    <td class="px-3 py-2" colspan="3">${scores}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        },
+        resetLeaderboard: async () => {
+            if(confirm('คำเตือน: นี่จะลบคะแนนของผู้เล่นทุกคน! ทำต่อหรือไม่?')) {
+                // Fetch all users and update progress to {}
+                // Firestore batch is better but loop for simplicity here
+                const snap = await getDocs(getCollRef("users"));
+                snap.forEach(async (d) => {
+                    await updateDoc(getDocRef("users", d.id), { progress: {}, totalPercent: 0 });
+                });
+                ui.toast('รีเซ็ตคะแนนเรียบร้อย', 'success');
+                admin.loadUsers();
+            }
+        }
+    };
+
+    // Run Init
+    window.onload = init;
+
+</script>
+
+</body>
+</html>
